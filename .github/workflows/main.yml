@@ -9,6 +9,7 @@ env:
   REGISTRY: "registry.digitalocean.com/digitaltool"
   IMAGE_NAME: "cryptool-app"
   CONTAINER_NAME: "cryptool"
+  PORT: "80"
 
 jobs:
   build_and_push:
@@ -66,6 +67,6 @@ jobs:
             # Run a new container from a new image
             docker run -e DOPGURL -e ENV -d \
             --restart always \
-            --publish 8080:8080 \
+            --publish 80:80 \
             --name $(echo $CONTAINER_NAME) \
             $(echo $REGISTRY)/$(echo $IMAGE_NAME):$(echo $GITHUB_SHA | head -c7)
