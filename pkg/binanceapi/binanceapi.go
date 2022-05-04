@@ -50,7 +50,7 @@ func BinanceAPI(pgdb *pg.DB) {
 	var nCoins, nCandles uint64
 	var goroutines int
 	if os.Getenv("ENV") == "DIGITAL" {
-		goroutines = 6
+		goroutines = 20
 		log.Println(runtime.NumCPU(), "CPUs")
 	} else {
 		goroutines = 5
