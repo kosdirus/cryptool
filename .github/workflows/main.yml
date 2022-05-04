@@ -9,7 +9,6 @@ env:
   REGISTRY: "registry.digitalocean.com/digitaltool"
   IMAGE_NAME: "cryptool-app"
   CONTAINER_NAME: "cryptool"
-  PORT: "80"
 
 jobs:
   build_and_push:
@@ -63,7 +62,6 @@ jobs:
             # Set env variables
             export DOPGURL=${{ secrets.DOPGURL }}
             export ENV=${{ secrets.ENV }}
-            export PORT=${{ secrets.ENV }}
             
             # Run a new container from a new image
             docker run -e DOPGURL -e ENV -d \

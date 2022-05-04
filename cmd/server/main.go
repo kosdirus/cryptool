@@ -21,7 +21,7 @@ func main() {
 	router := api.NewAPI(pgdb)
 
 	log.Print("we're up and running!")
-	port := os.Getenv("PORT")
+	port := "80"
 	if os.Getenv("ENV") == "LOCAL" {
 		port = os.Getenv("IPORT")
 	}

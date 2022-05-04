@@ -13,6 +13,6 @@ FROM alpine AS production
 WORKDIR /root/
 COPY --from=0 /github.com/kosdirus/cryptool/bin/app .
 
-EXPOSE 8080
+EXPOSE 80
 #USER nonroot:nonroot
 ENTRYPOINT ["./app"]
