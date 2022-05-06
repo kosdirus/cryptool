@@ -1,24 +1,34 @@
 package binanceapi
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/go-pg/pg/v10"
 	"github.com/kosdirus/cryptool/cmd/interal/candle"
 	"github.com/kosdirus/cryptool/cmd/interal/symbol"
+	"io"
 	"log"
+	"net/http"
+	"sync/atomic"
 	"time"
 )
 
 func CheckDBIntegrity(pgdb *pg.DB) {
 	t := time.Now()
+	log.Println("DB integrity check started: ", t.UTC())
+	var total int64
 	for _, s := range symbol.SymbolList {
 		for tfi, tf := range symbol.TimeframeMap {
-			getInfoByCoinAndTimeframe(pgdb, s, tf, tfi)
+			getInfoByCoinAndTimeframe(pgdb, s, tf, tfi, &total)
 		}
 	}
-	log.Println("DB integrity check finished.", time.Since(t))
+	log.Println("DB integrity check finished.", time.Since(t), "Total number of added candles:", total)
+	if total != 0 {
+		CheckDBIntegrity(pgdb)
+	}
 }
 
-func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframeint int) {
+func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframeint int, total *int64) {
 
 	c := &[]candle.Candle{}
 	pgdb.Model(c).
@@ -36,8 +46,9 @@ func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframei
 
 			if (n-n1)/60000 != int64(timeframeint) {
 				log.Println("Data is NOT ok for:", symbol, timeframe, ". List of open_time:", n, n1)
+				atomic.AddInt64(total, 1)
 
-				err := BinanceOneAPI(pgdb, symbol, timeframe, int64(timeframeint), n1+int64(timeframeint*60000))
+				err := internalBinanceOneAPI(pgdb, symbol, timeframe, int64(timeframeint), n1+int64(timeframeint*60000))
 				if err != nil {
 					log.Println("error while check db integrity and adding one api (checkdbintegrity.go line:41)", symbol, timeframe, "Err:", err)
 				} else {
@@ -50,8 +61,9 @@ func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframei
 			n1 = v.OpenTime
 			if (n-n1)/60000 != int64(timeframeint) {
 				log.Println("Data is NOT ok for:", symbol, timeframe, ". List of open_time:", n, n1)
+				atomic.AddInt64(total, 1)
 
-				err := BinanceOneAPI(pgdb, symbol, timeframe, int64(timeframeint), n1+int64(timeframeint*60000))
+				err := internalBinanceOneAPI(pgdb, symbol, timeframe, int64(timeframeint), n1+int64(timeframeint*60000))
 				if err != nil {
 					log.Println("error while check db integrity and adding one api (checkdbintegrity.go line:58)", symbol, timeframe, "Err:", err)
 				} else {
@@ -60,4 +72,36 @@ func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframei
 			}
 		}
 	}
+}
+
+func internalBinanceOneAPI(pgdb *pg.DB, symbol, timeframe string, k1, openTime int64) error {
+
+	url := fmt.Sprintf("https://www.binance.com/api/v3/klines?symbol=%s&interval=%s&startTime=%d&endTime=%d", symbol, timeframe, openTime, openTime+(k1*60000-1))
+	t := time.Now()
+	resp, err := http.Get(url)
+	tt := time.Since(t)
+	if err != nil && resp.StatusCode != 429 {
+		return err
+	} else if resp.StatusCode == 429 {
+		fmt.Println("response code 429, sleeping 4mins")
+		time.Sleep(4 * time.Minute)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	var test candle.TestAPIStruct
+	err = json.Unmarshal(body, &test)
+
+	if len(test) != 0 {
+		c := candle.ConvertAPItoCandleStruct(symbol, timeframe, test[0])
+
+		_, err = candle.CreateCandleCheckForExists(pgdb, &c)
+		if err != nil {
+			return err
+		}
+
+		log.Println("BinanceOneAPI ", symbol, timeframe, time.UnixMilli(openTime).UTC(), "time for GET", tt)
+	}
+
+	return nil
 }
