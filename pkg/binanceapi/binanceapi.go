@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -52,6 +53,9 @@ type mergedST struct {
 
 func getMergedSlice(pgdb *pg.DB, mergedSlice *[]mergedST) {
 	var goroutines = 6
+	if os.Getenv("ENV") == "DIGITAL" {
+		goroutines = 2
+	}
 	totalCoins := len(symbol.SymbolList)
 	lastGoroutine := goroutines - 1
 	stride := totalCoins / goroutines
