@@ -31,6 +31,15 @@ var (
 		720:  "12h",
 		1440: "1d",
 	}
+	TimeframeMapReverse = map[string]int{
+		"30m": 30,
+		"1h":  60,
+		"2h":  120,
+		"4h":  240,
+		"8h":  480,
+		"12h": 720,
+		"1d":  1440,
+	}
 	/*TimeframeDays = map[string]int{
 		"30m": 2,
 		"1h":  3,

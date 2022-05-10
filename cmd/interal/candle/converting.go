@@ -3,6 +3,7 @@ package candle
 import (
 	"fmt"
 	"github.com/go-pg/pg/v10"
+	"github.com/kosdirus/cryptool/cmd/interal/symbol"
 	"log"
 	"strconv"
 	"time"
@@ -112,6 +113,32 @@ func GetCandleBySymbolAndTimeframe(db *pg.DB, symbol, timeframe string) (*Candle
 		Select()
 	log.Println("converting.go line 85")
 	return candle, err
+}
+
+type AllLastOpenTime struct {
+	Coin         string `bson:"coin" json:"coin" pg:"coin,use_zero"`
+	Timeframe    string `bson:"timeframe" json:"timeframe" pg:"timeframe,use_zero"`
+	TimeframeInt int64  `bson:"timeframeint" json:"timeframeint" pg:"timeframeint,use_zero"`
+	OpenTime     int64  `bson:"open_time" json:"open_time" pg:"open_time,use_zero"`
+}
+
+func GetAllLastCandles(db *pg.DB) ([]AllLastOpenTime, error) {
+	t := time.Now()
+
+	var all []AllLastOpenTime
+	err := db.Model(&Candle{}).
+		Column("coin").
+		Column("timeframe").
+		ColumnExpr("MAX(open_time) as open_time").
+		Group("coin").
+		Group("timeframe").
+		Select(&all)
+	for i := range all {
+		(&all[i]).TimeframeInt = int64(symbol.TimeframeMapReverse[all[i].Timeframe])
+	}
+	//log.Println(all)
+	log.Println("GetAllLastCandles:  Time spent: ", time.Since(t))
+	return all, err
 }
 
 func GetLastCandle(db *pg.DB, coin, timeframe string) (int64, error) {

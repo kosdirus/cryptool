@@ -51,6 +51,31 @@ type mergedST struct {
 	opentime int64
 }
 
+func getMergedSliceOnce(pgdb *pg.DB, mergedSlice *[]mergedST) {
+	allLastCandles, err := candle.GetAllLastCandles(pgdb)
+	if err != nil {
+		log.Println("getMergedSliceOnce error:  ", err)
+		return
+	}
+	mx := sync.Mutex{}
+	for _, a := range allLastCandles {
+		for openTime := a.OpenTime; time.Now().UnixMilli()-openTime > a.TimeframeInt*60000*2; openTime = openTime + a.TimeframeInt*60000 {
+			if err != nil {
+				log.Println("binanceapi.go line 41:", err, a.Coin, a.Timeframe)
+				continue
+			}
+			mx.Lock()
+			*mergedSlice = append(*mergedSlice, mergedST{
+				symb:     a.Coin,
+				tf:       a.Timeframe,
+				tfint:    a.TimeframeInt,
+				opentime: openTime + a.TimeframeInt*60000,
+			})
+			mx.Unlock()
+		}
+	}
+}
+
 func getMergedSlice(pgdb *pg.DB, mergedSlice *[]mergedST) {
 	var goroutines = 6
 	if os.Getenv("ENV") == "DIGITAL" {
@@ -149,15 +174,15 @@ func BinanceAPI(pgdb *pg.DB) {
 
 	var mergedSlice []mergedST
 	tmerged := time.Now()
-	getMergedSlice(pgdb, &mergedSlice)
-	go coordinateBinanceOneAPI(len(mergedSlice), ch, donech, resch)
+	getMergedSliceOnce(pgdb, &mergedSlice)
 
-	//log.Println(mergedSlice)
 	log.Println("Time spent on merge slice:", time.Since(tmerged))
 	tbin := time.Now()
 	log.Println("START OF CALLING GOROUTINES", tbin.Format(time.StampMicro))
 	wg.Add(len(mergedSlice))
 
+	//log.Println(mergedSlice)
+	go coordinateBinanceOneAPI(len(mergedSlice), ch, donech, resch)
 	for _, ms := range mergedSlice {
 		go func(ms mergedST) {
 			BinanceOneAPI(ms, &wg, candlech, ch, resch)
