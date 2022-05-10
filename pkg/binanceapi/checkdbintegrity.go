@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -17,15 +18,29 @@ func CheckDBIntegrity(pgdb *pg.DB) {
 	t := time.Now()
 	log.Println("DB integrity check started: ", t.UTC())
 	var total int64
+
+	var wg sync.WaitGroup
+
+	ch := make(chan struct{}, 6)
 	for _, s := range symbol.SymbolList {
 		for tfi, tf := range symbol.TimeframeMap {
-			getInfoByCoinAndTimeframe(pgdb, s, tf, tfi, &total)
+			wg.Add(1)
+			go func(s, tf string, tfi int) {
+				ch <- struct{}{}
+				getInfoByCoinAndTimeframe(pgdb, s, tf, tfi, &total)
+				<-ch
+				wg.Done()
+			}(s, tf, tfi)
+
 		}
 	}
+	wg.Wait()
+	close(ch)
 	log.Println("DB integrity check finished.", time.Since(t), "Total number of added candles:", total)
 	if total != 0 {
 		CheckDBIntegrity(pgdb)
 	}
+	select {}
 }
 
 func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframeint int, total *int64) {

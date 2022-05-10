@@ -93,20 +93,38 @@ func getMergedSlice(pgdb *pg.DB, mergedSlice *[]mergedST) {
 	wg.Wait()
 }
 
-func coordinateBinanceOneAPI(ch chan<- struct{}, donech <-chan struct{}) {
-	ticker := time.NewTicker(61 * time.Second)
-	for i := 0; i < 1190; i++ {
-		ch <- struct{}{}
+func coordinateBinanceOneAPI(length int, ch chan<- struct{}, donech <-chan struct{}, resch <-chan struct{}) {
+	time.Sleep(5 * time.Second)
+	ticker := time.NewTicker(3 * time.Minute)
+	const lenglimit = 1190
+	var leng int
+	proc := func() {
+		if length >= lenglimit {
+			leng = lenglimit
+			length -= lenglimit
+		} else {
+			leng = length
+			length = 0
+		}
+		for i := 0; i < leng; i++ {
+			select {
+			case ch <- struct{}{}:
+			}
+			time.Sleep(3 * time.Millisecond)
+		}
+		for i := 0; i < leng; i++ {
+			select {
+			case <-resch:
+			}
+		}
+		ticker.Reset(62 * time.Second)
 	}
-	time.Sleep(55 * time.Second)
+	proc()
 
 	for {
 		select {
 		case <-ticker.C:
-			for i := 0; i < 1190-len(ch); i++ {
-
-				ch <- struct{}{}
-			}
+			proc()
 		case <-donech:
 			log.Println("Donech received, coordinateBinanceOneAPI finish!!")
 			return
@@ -117,34 +135,34 @@ func coordinateBinanceOneAPI(ch chan<- struct{}, donech <-chan struct{}) {
 func BinanceAPI(pgdb *pg.DB) {
 	fmt.Println("BinanceAPI start", time.Now().UTC())
 	candlech := make(chan candle.Candle, 15)
-	ch := make(chan struct{}, 1190)
+	ch := make(chan struct{})
+	resch := make(chan struct{}, 500)
 	donech := make(chan struct{}, 1)
 	var wg sync.WaitGroup
 	go createCandleCheckForExistsInternal(pgdb, candlech)
-	go coordinateBinanceOneAPI(ch, donech)
 	tt := time.Now()
 	var nCoins, nCandles uint64
 
 	var mergedSlice []mergedST
 	tmerged := time.Now()
 	getMergedSlice(pgdb, &mergedSlice)
+	go coordinateBinanceOneAPI(len(mergedSlice), ch, donech, resch)
 
-	log.Println(mergedSlice)
+	//log.Println(mergedSlice)
 	log.Println("Time spent on merge slice:", time.Since(tmerged))
 	tbin := time.Now()
-
+	log.Println("START OF CALLING GOROUTINES", tbin.Format(time.StampMicro))
 	wg.Add(len(mergedSlice))
 
 	for _, ms := range mergedSlice {
-		go func() {
-			BinanceOneAPI(ms, &wg, candlech, ch)
-		}()
-		time.Sleep(7 * time.Millisecond)
+		go func(ms mergedST) {
+			BinanceOneAPI(ms, &wg, candlech, ch, resch)
+		}(ms)
 		atomic.AddUint64(&nCandles, 1)
 
 	}
 
-	atomic.AddUint64(&nCandles, 1)
+	//atomic.AddUint64(&nCandles, 1)
 	atomic.AddUint64(&nCoins, 1)
 
 	wg.Wait()
@@ -162,24 +180,26 @@ func BinanceAPI(pgdb *pg.DB) {
 	go CheckDBIntegrity(pgdb)
 }
 
-func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- candle.Candle, ch <-chan struct{}) error {
+func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- candle.Candle, ch <-chan struct{}, resch chan<- struct{}) error {
 	defer wg.Done()
 	url := fmt.Sprintf("https://www.binance.com/api/v3/klines?symbol=%s&interval=%s&startTime=%d&endTime=%d", ms.symb, ms.tf, ms.opentime, ms.opentime+(ms.tfint*60000-1))
 	<-ch
 	t := time.Now()
 	resp, err := http.Get(url)
 	tt := time.Since(t)
+	resch <- struct{}{}
+	//runtime.Gosched()
 
-	log.Println(ms)
+	log.Println(ms, t.Format(time.StampMicro), tt)
 
 	if err != nil && resp.StatusCode != 429 {
 		return err
 	} else if resp.StatusCode == 429 {
 		fmt.Println("response code 429, sending pause signal to channel, sleeping 70seconds. Goroutine nums:", runtime.NumGoroutine())
-		resp, err = http.Get(url)
+		/*resp, err = http.Get(url)
 		if err != nil {
 			return err
-		}
+		}*/
 	}
 
 	body, _ := io.ReadAll(resp.Body)
@@ -192,7 +212,8 @@ func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- candle.Candl
 
 		candlech <- c
 
-		log.Println("BinanceOneAPI ", ms.symb, ms.tf, time.UnixMilli(ms.opentime).UTC(), "time for GET", tt)
+		//log.Println("BinanceOneAPI ", ms.symb, ms.tf, time.UnixMilli(ms.opentime).UTC().Format("2006.01.02 15:04"), "time for GET",
+		//	tt, "Time now:", time.Now().Format(time.StampMicro))
 	}
 	return nil
 }
