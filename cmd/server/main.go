@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/kosdirus/cryptool/pkg/api"
-	"github.com/kosdirus/cryptool/pkg/binanceapi"
 	"github.com/kosdirus/cryptool/pkg/db"
 	"log"
 	"net/http"
@@ -15,8 +14,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	go binanceapi.BinanceAPISchedule(pgdb)
 
 	router := api.NewAPI(pgdb)
 

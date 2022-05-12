@@ -21,7 +21,7 @@ func CheckDBIntegrity(pgdb *pg.DB) {
 
 	var wg sync.WaitGroup
 
-	ch := make(chan struct{}, 6)
+	ch := make(chan struct{}, 5)
 	for _, s := range symbol.SymbolList {
 		for tfi, tf := range symbol.TimeframeMap {
 			wg.Add(1)

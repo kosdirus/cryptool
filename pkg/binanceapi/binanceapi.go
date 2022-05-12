@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func BinanceAPISchedule(pgdb *pg.DB) {
+func BinanceAPISchedule(pgdb *pg.DB, BinanceAPIrun *uint32) {
 	log.Println("binance API schedule started")
 	for time.Now().Minute()%30 != 0 {
 		time.Sleep(5 * time.Second)
@@ -31,14 +31,14 @@ func BinanceAPISchedule(pgdb *pg.DB) {
 	case 3:
 		time.Sleep(1 * time.Second)
 	}
-	go BinanceAPI(pgdb)
+	go BinanceAPI(pgdb, BinanceAPIrun)
 	ticker := time.NewTicker(30 * time.Minute)
 
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				BinanceAPI(pgdb)
+				BinanceAPI(pgdb, BinanceAPIrun)
 			}
 		}
 	}()
@@ -123,7 +123,6 @@ func getMergedSlice(pgdb *pg.DB, mergedSlice *[]mergedST) {
 }
 
 func coordinateBinanceOneAPI(length int, ch chan<- struct{}, donech <-chan struct{}, resch <-chan struct{}) {
-	time.Sleep(5 * time.Second)
 	ticker := time.NewTicker(3 * time.Minute)
 	const lenglimit = 1190
 	var leng int
@@ -161,7 +160,15 @@ func coordinateBinanceOneAPI(length int, ch chan<- struct{}, donech <-chan struc
 	}
 }
 
-func BinanceAPI(pgdb *pg.DB) {
+func BinanceAPI(pgdb *pg.DB, BinanceAPIrun *uint32) {
+	if atomic.LoadUint32(BinanceAPIrun) == 1 {
+		log.Println("Another BinanceAPI instance is running.")
+		return
+	} else {
+		atomic.SwapUint32(BinanceAPIrun, 1)
+	}
+	defer atomic.SwapUint32(BinanceAPIrun, 0)
+
 	fmt.Println("BinanceAPI start", time.Now().UTC())
 	candlech := make(chan candle.Candle, 15)
 	ch := make(chan struct{})
@@ -182,7 +189,7 @@ func BinanceAPI(pgdb *pg.DB) {
 	wg.Add(len(mergedSlice))
 
 	//log.Println(mergedSlice)
-	go coordinateBinanceOneAPI(len(mergedSlice), ch, donech, resch)
+	tformerger := time.Now()
 	for _, ms := range mergedSlice {
 		go func(ms mergedST) {
 			BinanceOneAPI(ms, &wg, candlech, ch, resch)
@@ -190,6 +197,8 @@ func BinanceAPI(pgdb *pg.DB) {
 		atomic.AddUint64(&nCandles, 1)
 
 	}
+	log.Println("Time for calling all goroutines: ", time.Since(tformerger), len(mergedSlice))
+	go coordinateBinanceOneAPI(len(mergedSlice), ch, donech, resch)
 
 	//atomic.AddUint64(&nCandles, 1)
 	atomic.AddUint64(&nCoins, 1)

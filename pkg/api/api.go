@@ -19,6 +19,10 @@ func NewAPI(pgdb *pg.DB) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger, middleware.WithValue("DB", pgdb))
 
+	var BinanceAPIrun uint32
+
+	go binanceapi.BinanceAPISchedule(pgdb, &BinanceAPIrun)
+
 	r.Route("/candles", func(r chi.Router) {
 		r.Post("/", createCandle)
 		r.Get("/{candleMyID}", getCandleByMyID)
@@ -51,7 +55,7 @@ func NewAPI(pgdb *pg.DB) *chi.Mux {
 
 	r.Get("/binanceapi", func(w http.ResponseWriter, r *http.Request) {
 		go func() {
-			binanceapi.BinanceAPI(pgdb)
+			binanceapi.BinanceAPI(pgdb, &BinanceAPIrun)
 		}()
 		w.Write([]byte("BinanceAPIToPostgres migration started! Have some rest!"))
 		time.Sleep(400 * time.Millisecond)
