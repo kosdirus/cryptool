@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func BinanceZipToPostgres(pgdb *pg.DB, w http.ResponseWriter) {
+func BinanceZipToPostgres(pgdb *pg.DB) {
 	tn := time.Now()
 	var nFilesDownload, nFilesChecksum, nFilesParse, nRawsParse, nDuplicateParse uint64
 	var goroutines int
@@ -71,7 +71,7 @@ func BinanceZipToPostgres(pgdb *pg.DB, w http.ResponseWriter) {
 								log.Println("binancezip.go line 64:", err, path)
 								return
 							}
-							w.Write([]byte(fmt.Sprintf("cvs parsed: %s\n", path)))
+							//w.Write([]byte(fmt.Sprintf("cvs parsed: %s\n", path)))
 							atomic.AddUint64(&nFilesParse, 1)
 						}
 						t = t.Add(-24 * time.Hour)

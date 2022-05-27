@@ -6,6 +6,7 @@ import (
 	"github.com/kosdirus/cryptool/cmd/interal/symbol"
 	"log"
 	"time"
+	"unicode"
 )
 
 /*
@@ -19,22 +20,59 @@ import (
 		2.2. send message to user
 
 */
+func isInt(s string) bool {
+	for _, c := range s {
+		if !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	return true
+}
 
-func StrongDuringDowntrend(pgdb *pg.DB, HighTime string) map[string]float64 {
-	t, err := time.Parse("20060102", HighTime)
-	if err != nil {
-		log.Println("Error during StrongDuringDowntrend func (time Parse):", err)
+func checkTimeFormat(receivedTime string) (time.Time, bool) {
+	var t time.Time
+	var err error
+
+	if len(receivedTime) == 6 && isInt(receivedTime) {
+		t, err = time.Parse("20060102", "20"+receivedTime)
+		if err != nil {
+			log.Println("Error during StrongDuringDowntrend func (time Parse):", err)
+			return t, false
+		}
+	} else if len(receivedTime) == 8 && isInt(receivedTime) {
+		t, err = time.Parse("20060102", receivedTime)
+		if err != nil {
+			log.Println("Error during StrongDuringDowntrend func (time Parse):", err)
+			return t, false
+		}
+	} else {
+		log.Println("date is not valid, try use one of next formats: ")
+		return t, false
+	}
+
+	return t, true
+}
+
+func StrongDuringDowntrend(pgdb *pg.DB, highTime string) map[string]float64 {
+	t, ok := checkTimeFormat(highTime)
+	if !ok {
 		return nil
 	}
+
 	tint := t.UnixMilli()
 	candleMap1 := candleHandlerSDD(pgdb, "1d", tint)
 
 	tint1 := time.Now().UnixMilli()
 	candleMap2 := candleHandlerSDD(pgdb, "30m", tint1-tint1%(30*60000)-30*60000)
-	for len(candleMap2) != len(symbol.SymbolList) {
+	var i int
+	for i = 0; len(candleMap2) != len(symbol.SymbolList) && i < 10; i++ {
 		time.Sleep(20 * time.Second)
 		candleMap2 = candleHandlerSDD(pgdb, "30m", tint1-tint1%(30*60000)-30*60000)
 	}
+	if i == 10 {
+		return nil
+	}
+
 	finalCandleMap := make(map[string]float64)
 	for s := range candleMap1 {
 		finalCandleMap[s] = (candleMap2[s] - candleMap1[s]) / candleMap1[s] * 100
@@ -44,21 +82,26 @@ func StrongDuringDowntrend(pgdb *pg.DB, HighTime string) map[string]float64 {
 	return finalCandleMap
 }
 
-func StrongDuringUptrend(pgdb *pg.DB, LowTime string) map[string]float64 {
-	t, err := time.Parse("20060102", LowTime)
-	if err != nil {
-		log.Println("Error during StrongDuringDowntrend func (time Parse):", err)
+func StrongDuringUptrend(pgdb *pg.DB, lowTime string) map[string]float64 {
+	t, ok := checkTimeFormat(lowTime)
+	if !ok {
 		return nil
 	}
+
 	tint := t.UnixMilli()
 	candleMap1 := candleHandlerSDU(pgdb, "1d", tint)
 
 	tint1 := time.Now().UnixMilli()
 	candleMap2 := candleHandlerSDU(pgdb, "30m", tint1-tint1%(30*60000)-30*60000)
-	for len(candleMap2) != len(symbol.SymbolList) {
+	var i int
+	for ; len(candleMap2) != len(symbol.SymbolList) && i < 4; i++ {
 		time.Sleep(20 * time.Second)
 		candleMap2 = candleHandlerSDU(pgdb, "30m", tint1-tint1%(30*60000)-30*60000)
 	}
+	if i == 4 {
+		return nil
+	}
+
 	finalCandleMap := make(map[string]float64)
 	for s := range candleMap1 {
 		finalCandleMap[s] = (candleMap2[s] - candleMap1[s]) / candleMap1[s] * 100

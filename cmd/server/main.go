@@ -1,12 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"github.com/kosdirus/cryptool/pkg/api"
 	"github.com/kosdirus/cryptool/pkg/db"
 	"log"
-	"net/http"
-	"os"
 )
 
 func main() {
@@ -15,7 +12,10 @@ func main() {
 		panic(err)
 	}
 
-	router := api.NewAPI(pgdb)
+	api.EchoApi(pgdb)
+
+	//Old Chi router
+	/*router := api.NewAPI(pgdb)
 
 	log.Print("we're up and running!")
 	port := "80"
@@ -25,7 +25,7 @@ func main() {
 	err = http.ListenAndServe(fmt.Sprintf(":%s", port), router)
 	if err != nil {
 		log.Println("error from router", err)
-	}
+	}*/
 	log.Print("we're up and running! 2")
 
 }

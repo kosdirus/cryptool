@@ -62,9 +62,11 @@ jobs:
             # Set env variables
             export DOPGURL=${{ secrets.DOPGURL }}
             export ENV=${{ secrets.ENV }}
+            export LAPTOPIP=${{ secrets.LAPTOPIP }}
+            export TGBOTIP=${{ secrets.TGBOTIP }}
             
             # Run a new container from a new image
-            docker run -e DOPGURL -e ENV -d \
+            docker run -e DOPGURL -e ENV -e LAPTOPIP -e TGBOTIP-d \
             --restart always \
             --publish 80:80 \
             --interactive \

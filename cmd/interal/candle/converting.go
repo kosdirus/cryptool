@@ -105,7 +105,7 @@ func GetCandleByTimeframeDate(db *pg.DB, timeframe string, opentime int64) ([]Ca
 
 func GetCandleBySymbolAndTimeframe(db *pg.DB, symbol, timeframe string) (*Candle, error) {
 	candle := &Candle{}
-	log.Println("converting.go line 81")
+	//log.Println("converting.go line 81")
 	err := db.Model(candle).
 		Where("candle.coin = ? AND candle.timeframe = ?", symbol, timeframe).
 		Order("open_time DESC").
@@ -157,8 +157,8 @@ func GetLastCandle(db *pg.DB, coin, timeframe string) (int64, error) {
 	return candle.OpenTime, err
 }
 
-func GetCandles(db *pg.DB) ([]*Candle, error) {
-	candles := make([]*Candle, 0)
+func GetCandles(db *pg.DB) ([]Candle, error) {
+	candles := make([]Candle, 0)
 	log.Println("converting.go line 103")
 	err := db.Model(&candles).
 		Select()

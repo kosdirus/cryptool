@@ -38,7 +38,7 @@ func NewAPI(pgdb *pg.DB) *chi.Mux {
 	})
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("hello world"))
+		w.Write([]byte("Hello, World 👋!"))
 	})
 
 	r.Get("/dbintegrity", func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +49,7 @@ func NewAPI(pgdb *pg.DB) *chi.Mux {
 
 	r.Get("/binancezip", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("BinanceZipToPostgres migration started! Have some rest!"))
-		go binancezip.BinanceZipToPostgres(pgdb, w)
+		go binancezip.BinanceZipToPostgres(pgdb)
 		time.Sleep(400 * time.Millisecond)
 	})
 
@@ -329,9 +329,9 @@ func getCandleByMyID(w http.ResponseWriter, r *http.Request) {
 }
 
 type CandlesResponse struct {
-	Success bool             `json:"success"`
-	Error   string           `json:"error"`
-	Candles []*candle.Candle `json:"candles"`
+	Success bool            `json:"success"`
+	Error   string          `json:"error"`
+	Candles []candle.Candle `json:"candles"`
 }
 
 func getCandles(w http.ResponseWriter, r *http.Request) {
