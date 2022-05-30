@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"github.com/kosdirus/cryptool/internal/core"
 	"strconv"
 	"time"
@@ -40,5 +41,26 @@ func ConvertBCtoCandleStruct(symbol, timeframe string, bc core.BinanceCandle) (c
 	c.NumberOfTrades = bc.NumberOfTrades
 	c.TakerBuyBaseAssetVolume = bc.TakerBuyBaseAssetVolume
 	c.TakerBuyQuoteAssetVolume = bc.TakerBuyQuoteAssetVolume
+	return c
+}
+
+func ConvertAPItoCandleStruct(symbol, timeframe string, bc []interface{}) (c core.Candle) {
+	c.CoinTF = symbol + timeframe
+	c.MyID = c.CoinTF + fmt.Sprintf("%.f", bc[0])
+	c.Coin = symbol
+	c.Timeframe = timeframe
+	c.OpenTime, _ = strconv.ParseInt(fmt.Sprintf("%.f", bc[0]), 10, 64)
+	c.UTCOpenTime = time.UnixMilli(c.OpenTime).UTC()
+	c.Open, _ = strconv.ParseFloat(fmt.Sprintf("%s", bc[1]), 64)
+	c.High, _ = strconv.ParseFloat(fmt.Sprintf("%s", bc[2]), 64)
+	c.Low, _ = strconv.ParseFloat(fmt.Sprintf("%s", bc[3]), 64)
+	c.Close, _ = strconv.ParseFloat(fmt.Sprintf("%s", bc[4]), 64)
+	c.Volume, _ = strconv.ParseFloat(fmt.Sprintf("%s", bc[5]), 64)
+	c.CloseTime, _ = strconv.ParseInt(fmt.Sprintf("%.f", bc[6]), 10, 64)
+	c.UTCCloseTime = time.UnixMilli(c.CloseTime).UTC()
+	c.QuoteAssetVolume, _ = strconv.ParseFloat(fmt.Sprintf("%s", bc[7]), 64)
+	c.NumberOfTrades, _ = strconv.ParseInt(fmt.Sprintf("%.f", bc[8]), 10, 64)
+	c.TakerBuyBaseAssetVolume, _ = strconv.ParseFloat(fmt.Sprintf("%s", bc[9]), 64)
+	c.TakerBuyQuoteAssetVolume, _ = strconv.ParseFloat(fmt.Sprintf("%s", bc[10]), 64)
 	return c
 }

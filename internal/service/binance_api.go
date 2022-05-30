@@ -50,10 +50,10 @@ type mergedST struct {
 	opentime int64
 }
 
-func getMergedSliceOnce(pgdb *pg.DB, mergedSlice *[]mergedST) {
+func getMergedSlice(pgdb *pg.DB, mergedSlice *[]mergedST) {
 	allLastCandles, err := psql.GetAllLastCandles(pgdb)
 	if err != nil {
-		log.Println("getMergedSliceOnce error:  ", err)
+		log.Println("getMergedSlice error:  ", err)
 		return
 	}
 	mx := sync.Mutex{}
@@ -98,7 +98,7 @@ func coordinateBinanceOneAPI(length int, ch chan<- struct{}, donech <-chan struc
 			case <-resch:
 			}
 		}
-		ticker.Reset(62 * time.Second)
+		ticker.Reset(61 * time.Second)
 	}
 	proc()
 
@@ -134,7 +134,7 @@ func BinanceAPI(pgdb *pg.DB, BinanceAPIrun *uint32) {
 
 	var mergedSlice []mergedST
 	tmerged := time.Now()
-	getMergedSliceOnce(pgdb, &mergedSlice)
+	getMergedSlice(pgdb, &mergedSlice)
 
 	log.Println("Time spent on merge slice:", time.Since(tmerged))
 	tbin := time.Now()
@@ -194,11 +194,14 @@ func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- core.Candle,
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	var value [][]string
+	var value [][]interface{}
 	err = json.Unmarshal(body, &value)
+	if err != nil {
+		log.Println(err)
+	}
 
-	if len(value) != 0 {
-		c := ConvertBCtoCandleStruct(ms.symb, ms.tf, ConvertRawToStruct(value[0]))
+	if len(value) != 0 { // && value[0][0] != 0 (open_time in value should not be 0)
+		c := ConvertAPItoCandleStruct(ms.symb, ms.tf, value[0])
 
 		candlech <- c
 

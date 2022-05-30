@@ -40,8 +40,10 @@ func CheckDBIntegrity(pgdb *pg.DB) {
 	log.Println("DB integrity check finished.", time.Since(t), "Total number of added candles:", total)
 	if total != 0 {
 		CheckDBIntegrity(pgdb)
+	} else {
+		log.Println("ChechDBIntegrity finished.")
 	}
-	select {}
+
 }
 
 func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframeint int, total *int64) {
@@ -105,11 +107,11 @@ func internalBinanceOneAPI(pgdb *pg.DB, symbol, timeframe string, k1, openTime i
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	var value [][]string
+	var value [][]interface{}
 	err = json.Unmarshal(body, &value)
 
 	if len(value) != 0 {
-		c := ConvertBCtoCandleStruct(symbol, timeframe, ConvertRawToStruct(value[0]))
+		c := ConvertAPItoCandleStruct(symbol, timeframe, value[0])
 
 		_, err = psql.CreateCandleCheckForExists(pgdb, &c)
 		if err != nil {
