@@ -46,13 +46,19 @@ func CheckDBIntegrity(pgdb *pg.DB) {
 
 }
 
+type openTimeFromDB struct {
+	OpenTime int64 `bson:"open_time" json:"open_time" pg:"open_time,use_zero"`
+}
+
 func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframeint int, total *int64) {
 
-	c := &[]core.Candle{}
-	pgdb.Model(c).
+	//c := &[]core.Candle{}
+	c := &[]openTimeFromDB{}
+	pgdb.Model(&core.Candle{}).
+		Column("open_time").
 		Where("coin = ? AND timeframe = ?", symbol, timeframe).
 		Order("open_time DESC").
-		Select()
+		Select(c)
 
 	var n, n1 int64
 
