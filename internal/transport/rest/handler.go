@@ -1,86 +1,17 @@
-package api
+package rest
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-pg/pg/v10"
-	"github.com/kosdirus/cryptool/cmd/interal/candle"
-	"github.com/kosdirus/cryptool/pkg/binanceapi"
-	"github.com/kosdirus/cryptool/pkg/binancezip"
-	"github.com/kosdirus/cryptool/pkg/tglogic"
+	"github.com/kosdirus/cryptool/internal/core"
+	"github.com/kosdirus/cryptool/internal/service"
+	"github.com/kosdirus/cryptool/internal/storage/psql"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"log"
 	"net/http"
-	"os"
 	"time"
 )
-
-func EchoApi(pgdb *pg.DB) {
-	// Echo instance
-	e := echo.New()
-
-	var BinanceAPIrun uint32
-	go binanceapi.BinanceAPISchedule(pgdb, &BinanceAPIrun)
-
-	// Middleware
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			c.Set("DB", pgdb)
-			c.Set("BinanceAPIrun", &BinanceAPIrun)
-			return next(c)
-		}
-	})
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-
-	//Block requests received not from list of allowed IP addresses
-	//If you want to give access to all IP addresses - just comment or delete "if block" below.
-	if os.Getenv("ENV") == "DIGITAL" {
-		e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-			return func(c echo.Context) error {
-				//Map for allowed IP addresses is used here for convenience
-				//for those who needs many IP addresses to be allowed
-				allowedIPaddresses := map[string]struct{}{
-					os.Getenv("LAPTOPIP"): {},
-					os.Getenv("TGBOTIP"):  {},
-				}
-				if _, exists := allowedIPaddresses[c.RealIP()]; !exists {
-					return echo.NewHTTPError(http.StatusUnauthorized,
-						fmt.Sprintf("IP address %s not allowed", c.RealIP()))
-				}
-				return next(c)
-			}
-		})
-	}
-
-	// Routes
-	e.GET("/", hello)
-	e.GET("/binanceapi", binanceAPIhandler)
-	e.GET("/binancezip", binanceZipHandler)
-	e.GET("/dbintegrity", dbIntegrityHandler)
-
-	g := e.Group("/candles")
-	g.POST("/", createCandleEcho)
-	g.GET("/:candleMyID", getCandleByMyIDecho)
-	g.GET("/", getCandlesEcho)
-	g.PUT("/:canldeMyID", updateCandleByMyIDecho)
-	g.DELETE("/:candleMyID", deleteCandleByMyIDecho)
-
-	g = e.Group("/tg")
-	g.GET("/:symbol/:timeframe", tgGetSymbolEcho)
-	g.GET("/sdd/:time", sddEcho)
-	g.GET("/sdu/:time", sduEcho)
-
-	routes := e.Router()
-	routes.Add("GET", "/test1", hello)
-	// Start server
-	port := "80"
-	if os.Getenv("ENV") == "LOCAL" {
-		port = os.Getenv("IPORT")
-	}
-	e.Logger.Fatal(e.Start(fmt.Sprint(":", port)))
-}
 
 func deleteCandleByMyIDecho(c echo.Context) error {
 	candleMyID := c.Param("candleMyID")
@@ -102,7 +33,7 @@ func deleteCandleByMyIDecho(c echo.Context) error {
 	}
 
 	// delete the candle
-	err := candle.DeleteCandle(pgdb, candleMyID)
+	err := psql.DeleteCandle(pgdb, candleMyID)
 	if err != nil {
 		res := &CandleResponse{
 			Success: false,
@@ -130,8 +61,6 @@ func deleteCandleByMyIDecho(c echo.Context) error {
 	return nil
 }
 
-// Handlers
-
 func hello(c echo.Context) error {
 	return c.String(http.StatusOK, fmt.Sprint("Hello, World 👋!\n"))
 }
@@ -141,10 +70,10 @@ func getCandlesEcho(c echo.Context) error {
 	// get database from context
 	pgdb, ok := c.Get("DB").(*pg.DB)
 	if !ok {
-		res := &CandleResponse{
+		res := &CandlesResponse{
 			Success: false,
 			Error:   "could not get database from context",
-			Candle:  nil,
+			Candles: nil,
 		}
 		err := json.NewEncoder(c.Response()).Encode(res)
 		if err != nil {
@@ -156,7 +85,7 @@ func getCandlesEcho(c echo.Context) error {
 
 	t := time.Now().UnixMilli()
 	tint := t - t%(30*60000) - 30*60000
-	candles, err := candle.GetCandleByTimeframeDate(pgdb, "30m", tint)
+	candles, err := psql.GetCandleByTimeframeDate(pgdb, "30m", tint)
 	if err != nil {
 		res := &CandlesResponse{
 			Success: false,
@@ -204,7 +133,7 @@ func getCandleByMyIDecho(c echo.Context) error {
 	}
 
 	// query for the candleInstance
-	candleInstance, err := candle.GetCandleByMyID(pgdb, candleMyID)
+	candleInstance, err := psql.GetCandleByMyID(pgdb, candleMyID)
 	if err != nil {
 		res := &CandleResponse{
 			Success: false,
@@ -236,7 +165,7 @@ func updateCandleByMyIDecho(c echo.Context) error {
 	candleMyID := c.Param("candleMyID")
 
 	// parse in the request body
-	req := &UpdateCandleByMyIDRequest{}
+	req := &CandleRequest{}
 	err := json.NewDecoder(c.Request().Body).Decode(req)
 	if err != nil {
 		res := &CandleResponse{
@@ -269,7 +198,7 @@ func updateCandleByMyIDecho(c echo.Context) error {
 	}
 
 	// update the candle
-	candleInstance, err := candle.UpdateCandle(pgdb, &candle.Candle{
+	candleInstance, err := psql.UpdateCandle(pgdb, &core.Candle{
 		ID:                       req.ID,
 		MyID:                     candleMyID,
 		CoinTF:                   req.CoinTF,
@@ -325,7 +254,7 @@ func updateCandleByMyIDecho(c echo.Context) error {
 
 func createCandleEcho(c echo.Context) error {
 	// parse in the request body
-	req := &CreateCandleRequest{}
+	req := &CandleRequest{}
 	err := json.NewDecoder(c.Request().Body).Decode(req)
 	if err != nil {
 		res := &CandleResponse{
@@ -358,7 +287,7 @@ func createCandleEcho(c echo.Context) error {
 	}
 
 	// insert our candle
-	candleinst, err := candle.CreateCandle(pgdb, &candle.Candle{
+	candleinst, err := psql.CreateCandle(pgdb, &core.Candle{
 		MyID:                     req.MyID,
 		CoinTF:                   req.CoinTF,
 		Coin:                     req.Coin,
@@ -416,7 +345,7 @@ func tgGetSymbolEcho(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 
 	// query for the candleInstance
-	candleInstance, err := candle.GetCandleBySymbolAndTimeframe(pgdb, symbol, timeframe)
+	candleInstance, err := psql.GetCandleBySymbolAndTimeframe(pgdb, symbol, timeframe)
 	if err != nil {
 		res := &CandleResponse{
 			Success: false,
@@ -450,7 +379,7 @@ func sddEcho(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 
 	// query for the candleInstance
-	candleMap := tglogic.StrongDuringDowntrend(pgdb, userTime)
+	candleMap := service.StrongDuringDowntrend(pgdb, userTime)
 
 	_ = json.NewEncoder(c.Response()).Encode(candleMap)
 	c.Response().WriteHeader(http.StatusOK)
@@ -464,7 +393,7 @@ func sduEcho(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 
 	// query for the candleInstance
-	candleMap := tglogic.StrongDuringUptrend(pgdb, userTime)
+	candleMap := service.StrongDuringUptrend(pgdb, userTime)
 
 	_ = json.NewEncoder(c.Response()).Encode(candleMap)
 	c.Response().WriteHeader(http.StatusOK)
@@ -476,7 +405,7 @@ func binanceAPIhandler(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 	BinanceAPIrun := c.Get("BinanceAPIrun").(*uint32)
 	go func() {
-		binanceapi.BinanceAPI(pgdb, BinanceAPIrun)
+		service.BinanceAPI(pgdb, BinanceAPIrun)
 	}()
 
 	return c.String(http.StatusOK, "BinanceAPIToPostgres migration started! Have some rest!")
@@ -486,7 +415,7 @@ func binanceZipHandler(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 
 	go func() {
-		binancezip.BinanceZipToPostgres(pgdb)
+		service.BinanceZipToPostgres(pgdb)
 	}()
 
 	return c.String(http.StatusOK, "BinanceZipToPostgres migration started! Have some rest!\n")
@@ -496,7 +425,7 @@ func dbIntegrityHandler(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 
 	go func() {
-		binanceapi.CheckDBIntegrity(pgdb)
+		service.CheckDBIntegrity(pgdb)
 	}()
 
 	return c.String(http.StatusOK, "Database integrity is being checked!\n")

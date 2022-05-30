@@ -1,31 +1,19 @@
 package main
 
 import (
-	"github.com/kosdirus/cryptool/pkg/api"
-	"github.com/kosdirus/cryptool/pkg/db"
+	"github.com/kosdirus/cryptool/internal/storage/psql"
+	"github.com/kosdirus/cryptool/internal/transport/rest"
 	"log"
 )
 
 func main() {
-	pgdb, err := db.NewDB()
+	pgdb, err := psql.NewDB()
 	if err != nil {
-		panic(err)
+		log.Println("Error occurred while connecting to Postgres:", err)
+		return
 	}
 
-	api.EchoApi(pgdb)
+	rest.EchoApiServer(pgdb)
 
-	//Old Chi router
-	/*router := api.NewAPI(pgdb)
-
-	log.Print("we're up and running!")
-	port := "80"
-	if os.Getenv("ENV") == "LOCAL" {
-		port = os.Getenv("IPORT")
-	}
-	err = http.ListenAndServe(fmt.Sprintf(":%s", port), router)
-	if err != nil {
-		log.Println("error from router", err)
-	}*/
-	log.Print("we're up and running! 2")
-
+	log.Print("Something went wrong, HTTP server didn't start.")
 }

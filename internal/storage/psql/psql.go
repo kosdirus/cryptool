@@ -1,4 +1,4 @@
-package db
+package psql
 
 import (
 	"fmt"

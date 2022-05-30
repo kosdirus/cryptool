@@ -1,4 +1,4 @@
-package binancezip
+package service
 
 import (
 	"fmt"

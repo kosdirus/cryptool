@@ -1,11 +1,12 @@
-package binanceapi
+package service
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-pg/pg/v10"
-	"github.com/kosdirus/cryptool/cmd/interal/candle"
-	"github.com/kosdirus/cryptool/cmd/interal/symbol"
+	"github.com/kosdirus/cryptool/internal/core"
+	"github.com/kosdirus/cryptool/internal/storage/psql"
+	"github.com/kosdirus/cryptool/internal/storage/psql/initdata"
 	"io"
 	"log"
 	"net/http"
@@ -22,8 +23,8 @@ func CheckDBIntegrity(pgdb *pg.DB) {
 	var wg sync.WaitGroup
 
 	ch := make(chan struct{}, 5)
-	for _, s := range symbol.SymbolList {
-		for tfi, tf := range symbol.TimeframeMap {
+	for _, s := range initdata.TradePairList {
+		for tfi, tf := range initdata.TimeframeMap {
 			wg.Add(1)
 			go func(s, tf string, tfi int) {
 				ch <- struct{}{}
@@ -45,7 +46,7 @@ func CheckDBIntegrity(pgdb *pg.DB) {
 
 func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframeint int, total *int64) {
 
-	c := &[]candle.Candle{}
+	c := &[]core.Candle{}
 	pgdb.Model(c).
 		Where("coin = ? AND timeframe = ?", symbol, timeframe).
 		Order("open_time DESC").
@@ -65,7 +66,7 @@ func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframei
 
 				err := internalBinanceOneAPI(pgdb, symbol, timeframe, int64(timeframeint), n1+int64(timeframeint*60000))
 				if err != nil {
-					log.Println("error while check db integrity and adding one api (checkdbintegrity.go line:41)", symbol, timeframe, "Err:", err)
+					log.Println("error while check db integrity and adding one api (check_db_integrity.go line:41)", symbol, timeframe, "Err:", err)
 				} else {
 					log.Println("Added candle to db:", symbol, timeframe, n1+int64(timeframeint*60000))
 				}
@@ -80,7 +81,7 @@ func getInfoByCoinAndTimeframe(pgdb *pg.DB, symbol, timeframe string, timeframei
 
 				err := internalBinanceOneAPI(pgdb, symbol, timeframe, int64(timeframeint), n1+int64(timeframeint*60000))
 				if err != nil {
-					log.Println("error while check db integrity and adding one api (checkdbintegrity.go line:58)", symbol, timeframe, "Err:", err)
+					log.Println("error while check db integrity and adding one api (check_db_integrity.go line:58)", symbol, timeframe, "Err:", err)
 				} else {
 					log.Println("Added candle to db:", symbol, timeframe, n1+int64(timeframeint*60000))
 				}
@@ -104,13 +105,13 @@ func internalBinanceOneAPI(pgdb *pg.DB, symbol, timeframe string, k1, openTime i
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	var test candle.TestAPIStruct
-	err = json.Unmarshal(body, &test)
+	var value [][]string
+	err = json.Unmarshal(body, &value)
 
-	if len(test) != 0 {
-		c := candle.ConvertAPItoCandleStruct(symbol, timeframe, test[0])
+	if len(value) != 0 {
+		c := ConvertBCtoCandleStruct(symbol, timeframe, ConvertRawToStruct(value[0]))
 
-		_, err = candle.CreateCandleCheckForExists(pgdb, &c)
+		_, err = psql.CreateCandleCheckForExists(pgdb, &c)
 		if err != nil {
 			return err
 		}

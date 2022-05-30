@@ -1,4 +1,4 @@
-package candle
+package core
 
 import (
 	"time"
@@ -20,7 +20,6 @@ type BinanceCandle struct {
 }
 
 type Candle struct {
-	//ID                       primitive.ObjectID `bson:"_id"`
 	ID                       int64     `bson:"id" json:"id" pg:"id"`
 	MyID                     string    `bson:"my_id" json:"my_id" pg:"my_id,use_zero"`
 	CoinTF                   string    `bson:"coin_tf" json:"coin_tf" pg:"coin_tf,use_zero"`

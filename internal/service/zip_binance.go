@@ -1,10 +1,10 @@
-package binancezip
+package service
 
 import (
 	"errors"
 	"fmt"
 	"github.com/go-pg/pg/v10"
-	"github.com/kosdirus/cryptool/cmd/interal/symbol"
+	"github.com/kosdirus/cryptool/internal/storage/psql/initdata"
 	"io"
 	"log"
 	"net/http"
@@ -25,7 +25,7 @@ func BinanceZipToPostgres(pgdb *pg.DB) {
 		goroutines = runtime.NumCPU() * 5
 	}
 
-	totalCoins := len(symbol.SymbolList)
+	totalCoins := len(initdata.TradePairList)
 	lastGoroutine := goroutines - 1
 	stride := totalCoins / goroutines
 
@@ -40,8 +40,8 @@ func BinanceZipToPostgres(pgdb *pg.DB) {
 				end = totalCoins
 			}
 
-			for _, symb := range symbol.SymbolList[start:end] {
-				for timeframe, days := range symbol.TimeframeDays {
+			for _, symb := range initdata.TradePairList[start:end] {
+				for timeframe, days := range initdata.TimeframeDays {
 					t := time.Now().Add(-24 * time.Hour)
 					for i := 0; i < days; i++ {
 						path := FindPath(symb, timeframe, t)
@@ -49,13 +49,13 @@ func BinanceZipToPostgres(pgdb *pg.DB) {
 						if fmt.Sprint(err) == "404" {
 							break
 						} else if err != nil {
-							log.Println("binancezip.go line 43:", err)
+							log.Println("zip_binance.go line 43:", err)
 							return
 						}
 
 						err = FileDownload(FindURLChecksum(symb, timeframe, t), FindPathChecksum(symb, timeframe, t))
 						if err != nil {
-							log.Println("binancezip.go line 49:", err)
+							log.Println("zip_binance.go line 49:", err)
 							return
 						}
 
@@ -68,7 +68,7 @@ func BinanceZipToPostgres(pgdb *pg.DB) {
 							}
 							err = ParseCSV(symb, timeframe, &nRawsParse, &nDuplicateParse, path, pgdb)
 							if err != nil {
-								log.Println("binancezip.go line 64:", err, path)
+								log.Println("zip_binance.go line 64:", err, path)
 								return
 							}
 							//w.Write([]byte(fmt.Sprintf("cvs parsed: %s\n", path)))

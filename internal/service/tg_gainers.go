@@ -1,9 +1,9 @@
-package tglogic
+package service
 
 import (
 	"github.com/go-pg/pg/v10"
-	"github.com/kosdirus/cryptool/cmd/interal/candle"
-	"github.com/kosdirus/cryptool/cmd/interal/symbol"
+	"github.com/kosdirus/cryptool/internal/storage/psql"
+	"github.com/kosdirus/cryptool/internal/storage/psql/initdata"
 	"log"
 	"time"
 	"unicode"
@@ -65,7 +65,7 @@ func StrongDuringDowntrend(pgdb *pg.DB, highTime string) map[string]float64 {
 	tint1 := time.Now().UnixMilli()
 	candleMap2 := candleHandlerSDD(pgdb, "30m", tint1-tint1%(30*60000)-30*60000)
 	var i int
-	for i = 0; len(candleMap2) != len(symbol.SymbolList) && i < 10; i++ {
+	for i = 0; len(candleMap2) != len(initdata.TradePairList) && i < 10; i++ {
 		time.Sleep(20 * time.Second)
 		candleMap2 = candleHandlerSDD(pgdb, "30m", tint1-tint1%(30*60000)-30*60000)
 	}
@@ -94,7 +94,7 @@ func StrongDuringUptrend(pgdb *pg.DB, lowTime string) map[string]float64 {
 	tint1 := time.Now().UnixMilli()
 	candleMap2 := candleHandlerSDU(pgdb, "30m", tint1-tint1%(30*60000)-30*60000)
 	var i int
-	for ; len(candleMap2) != len(symbol.SymbolList) && i < 4; i++ {
+	for ; len(candleMap2) != len(initdata.TradePairList) && i < 4; i++ {
 		time.Sleep(20 * time.Second)
 		candleMap2 = candleHandlerSDU(pgdb, "30m", tint1-tint1%(30*60000)-30*60000)
 	}
@@ -112,7 +112,7 @@ func StrongDuringUptrend(pgdb *pg.DB, lowTime string) map[string]float64 {
 }
 
 func candleHandlerSDD(pgdb *pg.DB, timeframe string, tint int64) map[string]float64 {
-	candleList, err := candle.GetCandleByTimeframeDate(pgdb, timeframe, tint)
+	candleList, err := psql.GetCandleByTimeframeDate(pgdb, timeframe, tint)
 	if err != nil {
 		log.Println("Error during StrongDuringDowntrend func (DB request):", err)
 		return nil
@@ -126,7 +126,7 @@ func candleHandlerSDD(pgdb *pg.DB, timeframe string, tint int64) map[string]floa
 }
 
 func candleHandlerSDU(pgdb *pg.DB, timeframe string, tint int64) map[string]float64 {
-	candleList, err := candle.GetCandleByTimeframeDate(pgdb, timeframe, tint)
+	candleList, err := psql.GetCandleByTimeframeDate(pgdb, timeframe, tint)
 	if err != nil {
 		log.Println("Error during StrongDuringUptrend func (DB request):", err)
 		return nil

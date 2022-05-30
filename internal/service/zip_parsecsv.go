@@ -1,10 +1,10 @@
-package binancezip
+package service
 
 import (
 	"archive/zip"
 	"encoding/csv"
 	"github.com/go-pg/pg/v10"
-	"github.com/kosdirus/cryptool/cmd/interal/candle"
+	"github.com/kosdirus/cryptool/internal/storage/psql"
 	"log"
 	"sync/atomic"
 )
@@ -18,15 +18,15 @@ func ParseCSV(symbol1, timeframe1 string, nRaws, nDupRaws *uint64, path string, 
 	defer func(z *zip.ReadCloser) {
 		err = z.Close()
 		if err != nil {
-			log.Println("parsecsv.go line 67:", err)
+			log.Println("zip_parsecsv.go line 67:", err)
 		}
 	}(z)
 	for _, f := range z.File {
 		r, _ := f.Open()
 		c, _ := csv.NewReader(r).ReadAll()
 		for i := range c {
-			candle1 := candle.ConvertBCtoCandleStruct(symbol1, timeframe1, candle.ConvertRawToStruct(c[i]))
-			inserted, err := candle.CreateCandleCheckForExists(pgdb, &candle1)
+			candle1 := ConvertBCtoCandleStruct(symbol1, timeframe1, ConvertRawToStruct(c[i]))
+			inserted, err := psql.CreateCandleCheckForExists(pgdb, &candle1)
 			if !inserted && err == nil {
 				ndup++
 				continue

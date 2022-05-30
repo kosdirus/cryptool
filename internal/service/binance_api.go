@@ -1,15 +1,14 @@
-package binanceapi
+package service
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-pg/pg/v10"
-	"github.com/kosdirus/cryptool/cmd/interal/candle"
-	"github.com/kosdirus/cryptool/cmd/interal/symbol"
+	"github.com/kosdirus/cryptool/internal/core"
+	"github.com/kosdirus/cryptool/internal/storage/psql"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -52,7 +51,7 @@ type mergedST struct {
 }
 
 func getMergedSliceOnce(pgdb *pg.DB, mergedSlice *[]mergedST) {
-	allLastCandles, err := candle.GetAllLastCandles(pgdb)
+	allLastCandles, err := psql.GetAllLastCandles(pgdb)
 	if err != nil {
 		log.Println("getMergedSliceOnce error:  ", err)
 		return
@@ -61,7 +60,7 @@ func getMergedSliceOnce(pgdb *pg.DB, mergedSlice *[]mergedST) {
 	for _, a := range allLastCandles {
 		for openTime := a.OpenTime; time.Now().UnixMilli()-openTime > a.TimeframeInt*60000*2; openTime = openTime + a.TimeframeInt*60000 {
 			if err != nil {
-				log.Println("binanceapi.go line 41:", err, a.Coin, a.Timeframe)
+				log.Println("binance_api.go line 41:", err, a.Coin, a.Timeframe)
 				continue
 			}
 			mx.Lock()
@@ -74,52 +73,6 @@ func getMergedSliceOnce(pgdb *pg.DB, mergedSlice *[]mergedST) {
 			mx.Unlock()
 		}
 	}
-}
-
-func getMergedSlice(pgdb *pg.DB, mergedSlice *[]mergedST) {
-	var goroutines = 6
-	if os.Getenv("ENV") == "DIGITAL" {
-		goroutines = 2
-	}
-	totalCoins := len(symbol.SymbolList)
-	lastGoroutine := goroutines - 1
-	stride := totalCoins / goroutines
-
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-
-	mx := sync.Mutex{}
-
-	for g := 0; g < goroutines; g++ {
-		go func(g int) {
-			start := g * stride
-			end := start + stride
-			if g == lastGoroutine {
-				end = totalCoins
-			}
-
-			for _, s := range symbol.SymbolList[start:end] {
-				for tfint, tf := range symbol.TimeframeMap {
-					for openTime, err := candle.GetLastCandle(pgdb, s, tf); time.Now().UnixMilli()-openTime > int64(tfint*60000*2); openTime = openTime + int64(tfint*60000) {
-						if err != nil {
-							log.Println("binanceapi.go line 41:", err, s, tf)
-							continue
-						}
-						mx.Lock()
-						*mergedSlice = append(*mergedSlice, mergedST{
-							symb:     s,
-							tf:       tf,
-							tfint:    int64(tfint),
-							opentime: openTime + int64(tfint*60000),
-						})
-						mx.Unlock()
-					}
-				}
-			}
-			wg.Done()
-		}(g)
-	}
-	wg.Wait()
 }
 
 func coordinateBinanceOneAPI(length int, ch chan<- struct{}, donech <-chan struct{}, resch <-chan struct{}) {
@@ -170,7 +123,7 @@ func BinanceAPI(pgdb *pg.DB, BinanceAPIrun *uint32) {
 	defer atomic.SwapUint32(BinanceAPIrun, 0)
 
 	fmt.Println("BinanceAPI start", time.Now().UTC())
-	candlech := make(chan candle.Candle, 15)
+	candlech := make(chan core.Candle, 15)
 	ch := make(chan struct{})
 	resch := make(chan struct{}, 500)
 	donech := make(chan struct{}, 1)
@@ -218,7 +171,7 @@ func BinanceAPI(pgdb *pg.DB, BinanceAPIrun *uint32) {
 	go CheckDBIntegrity(pgdb)
 }
 
-func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- candle.Candle, ch <-chan struct{}, resch chan<- struct{}) error {
+func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- core.Candle, ch <-chan struct{}, resch chan<- struct{}) error {
 	defer wg.Done()
 	url := fmt.Sprintf("https://www.binance.com/api/v3/klines?symbol=%s&interval=%s&startTime=%d&endTime=%d", ms.symb, ms.tf, ms.opentime, ms.opentime+(ms.tfint*60000-1))
 	<-ch
@@ -226,7 +179,6 @@ func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- candle.Candl
 	resp, err := http.Get(url)
 	tt := time.Since(t)
 	resch <- struct{}{}
-	//runtime.Gosched()
 
 	log.Println(ms, t.Format(time.StampMicro), tt)
 
@@ -242,11 +194,11 @@ func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- candle.Candl
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	var test candle.TestAPIStruct
-	err = json.Unmarshal(body, &test)
+	var value [][]string
+	err = json.Unmarshal(body, &value)
 
-	if len(test) != 0 {
-		c := candle.ConvertAPItoCandleStruct(ms.symb, ms.tf, test[0])
+	if len(value) != 0 {
+		c := ConvertBCtoCandleStruct(ms.symb, ms.tf, ConvertRawToStruct(value[0]))
 
 		candlech <- c
 
@@ -256,7 +208,7 @@ func BinanceOneAPI(ms mergedST, wg *sync.WaitGroup, candlech chan<- candle.Candl
 	return nil
 }
 
-func createCandleCheckForExistsInternal(db *pg.DB, candlech chan candle.Candle) {
+func createCandleCheckForExistsInternal(db *pg.DB, candlech chan core.Candle) {
 	for req := range candlech {
 		//t := time.Now()
 		//time.Sleep(30 * time.Millisecond)
