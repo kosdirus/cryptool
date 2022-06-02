@@ -7,6 +7,7 @@ import (
 	"os"
 )
 
+// NewDB connects to PostgreSQL database and returns pg.DB struct with pool of underlying connections.
 func NewDB() (*pg.DB, error) {
 	var opts *pg.Options
 	var err error

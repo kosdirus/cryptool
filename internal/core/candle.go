@@ -4,6 +4,7 @@ import (
 	"time"
 )
 
+// BinanceCandle is struct to convert []string received while reading CSV from Binance.
 type BinanceCandle struct {
 	OpenTime                 int64   `json:"open_time"`
 	Open                     float64 `json:"open"`
@@ -19,6 +20,10 @@ type BinanceCandle struct {
 	Ignore                   float64 `json:"ignore"`
 }
 
+// Candle is main struct used in this project. Comparing to BinanceCandle, it has more fields, which are
+// used for internal analytics and transporting logic, so it's used also to communicate with database.
+//
+// Candle is short name used in this project for the Japanese candlestick used in trading.
 type Candle struct {
 	ID                       int64     `bson:"id" json:"id" pg:"id"`
 	MyID                     string    `bson:"my_id" json:"my_id" pg:"my_id,use_zero"`

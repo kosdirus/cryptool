@@ -1,5 +1,6 @@
 package initdata
 
+// TradePairList is list of trade pairs (also called "coin") used for analysis in this project/app.
 var TradePairList = []string{"BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "SOLUSDT", "EGLDUSDT",
 	"SRMUSDT", "TWTUSDT", "AVAXUSDT", "DOTUSDT", "DOGEUSDT", "SHIBUSDT", "MATICUSDT", "ATOMUSDT", "LTCUSDT",
 	"NEARUSDT", "LINKUSDT", "TRXUSDT", "UNIUSDT", "FTTUSDT", "BCHUSDT", "ALGOUSDT", "MANAUSDT", "XLMUSDT",

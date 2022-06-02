@@ -2,6 +2,7 @@ package rest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/go-pg/pg/v10"
 	"github.com/kosdirus/cryptool/internal/core"
@@ -13,6 +14,7 @@ import (
 	"time"
 )
 
+// Handler deleteCandleByMyIDecho receives core.Candle.MyID and delete it from database.
 func deleteCandleByMyIDecho(c echo.Context) error {
 	candleMyID := c.Param("candleMyID")
 
@@ -65,7 +67,7 @@ func hello(c echo.Context) error {
 	return c.String(http.StatusOK, fmt.Sprint("Hello, World 👋!\n"))
 }
 
-// Returns 1 last closed candles for 30m timeframe for each symbol/coin trade pair
+// Handler getCandlesEcho returns 1 last closed candles for 30m timeframe for each trade pair.
 func getCandlesEcho(c echo.Context) error {
 	// get database from context
 	pgdb, ok := c.Get("DB").(*pg.DB)
@@ -113,6 +115,7 @@ func getCandlesEcho(c echo.Context) error {
 	return nil
 }
 
+// Handler getCandleByMyIDecho returns core.Candle by MyID given by param.
 func getCandleByMyIDecho(c echo.Context) error {
 	candleMyID := c.Param("candleMyID")
 
@@ -161,11 +164,12 @@ func getCandleByMyIDecho(c echo.Context) error {
 	return nil
 }
 
+// Handler updateCandleByMyIDecho updates core.Candle by MyID given by param.
 func updateCandleByMyIDecho(c echo.Context) error {
 	candleMyID := c.Param("candleMyID")
 
 	// parse in the request body
-	req := &CandleRequest{}
+	req := &core.Candle{}
 	err := json.NewDecoder(c.Request().Body).Decode(req)
 	if err != nil {
 		res := &CandleResponse{
@@ -180,7 +184,9 @@ func updateCandleByMyIDecho(c echo.Context) error {
 		c.Response().WriteHeader(http.StatusBadRequest)
 		return err
 	}
-
+	if candleMyID != req.MyID {
+		return errors.New("given candle has different MyID than param in URL")
+	}
 	// get the database from context
 	pgdb, ok := c.Get("DB").(*pg.DB)
 	if !ok {
@@ -198,32 +204,8 @@ func updateCandleByMyIDecho(c echo.Context) error {
 	}
 
 	// update the candle
-	candleInstance, err := psql.UpdateCandle(pgdb, &core.Candle{
-		ID:                       req.ID,
-		MyID:                     candleMyID,
-		CoinTF:                   req.CoinTF,
-		Coin:                     req.Coin,
-		Timeframe:                req.Timeframe,
-		UTCOpenTime:              req.UTCOpenTime,
-		OpenTime:                 req.OpenTime,
-		Open:                     req.Open,
-		High:                     req.High,
-		Low:                      req.Low,
-		Close:                    req.Close,
-		Volume:                   req.Volume,
-		UTCCloseTime:             req.UTCCloseTime,
-		CloseTime:                req.CloseTime,
-		QuoteAssetVolume:         req.QuoteAssetVolume,
-		NumberOfTrades:           req.NumberOfTrades,
-		TakerBuyBaseAssetVolume:  req.TakerBuyBaseAssetVolume,
-		TakerBuyQuoteAssetVolume: req.TakerBuyQuoteAssetVolume,
-		MA50:                     req.MA50,
-		MA50Trend:                req.MA50Trend,
-		MA100:                    req.MA100,
-		MA100Trend:               req.MA100Trend,
-		MA200:                    req.MA200,
-		MA200Trend:               req.MA200Trend,
-	})
+
+	_, err = psql.UpdateCandle(pgdb, req)
 	if err != nil {
 		res := &CandleResponse{
 			Success: false,
@@ -243,7 +225,7 @@ func updateCandleByMyIDecho(c echo.Context) error {
 	res := &CandleResponse{
 		Success: true,
 		Error:   "",
-		Candle:  candleInstance,
+		Candle:  req,
 	}
 
 	_ = json.NewEncoder(c.Response()).Encode(res)
@@ -252,9 +234,10 @@ func updateCandleByMyIDecho(c echo.Context) error {
 	return nil
 }
 
+// Handler createCandleEcho parses request bode and creates core.Candle in database.
 func createCandleEcho(c echo.Context) error {
 	// parse in the request body
-	req := &CandleRequest{}
+	req := &core.Candle{}
 	err := json.NewDecoder(c.Request().Body).Decode(req)
 	if err != nil {
 		res := &CandleResponse{
@@ -287,31 +270,7 @@ func createCandleEcho(c echo.Context) error {
 	}
 
 	// insert our candle
-	candleinst, err := psql.CreateCandle(pgdb, &core.Candle{
-		MyID:                     req.MyID,
-		CoinTF:                   req.CoinTF,
-		Coin:                     req.Coin,
-		Timeframe:                req.Timeframe,
-		UTCOpenTime:              req.UTCOpenTime,
-		OpenTime:                 req.OpenTime,
-		Open:                     req.Open,
-		High:                     req.High,
-		Low:                      req.Low,
-		Close:                    req.Close,
-		Volume:                   req.Volume,
-		UTCCloseTime:             req.UTCCloseTime,
-		CloseTime:                req.CloseTime,
-		QuoteAssetVolume:         req.QuoteAssetVolume,
-		NumberOfTrades:           req.NumberOfTrades,
-		TakerBuyBaseAssetVolume:  req.TakerBuyBaseAssetVolume,
-		TakerBuyQuoteAssetVolume: req.TakerBuyQuoteAssetVolume,
-		MA50:                     0.0,
-		MA50Trend:                false,
-		MA100:                    0.0,
-		MA100Trend:               false,
-		MA200:                    0.0,
-		MA200Trend:               false,
-	})
+	_, err = psql.CreateCandleCheckForExists(pgdb, req)
 	if err != nil {
 		res := &CandleResponse{
 			Success: false,
@@ -330,7 +289,7 @@ func createCandleEcho(c echo.Context) error {
 	res := &CandleResponse{
 		Success: true,
 		Error:   "",
-		Candle:  candleinst,
+		Candle:  req,
 	}
 	_ = json.NewEncoder(c.Response().Writer).Encode(res)
 	c.Response().WriteHeader(http.StatusOK)
@@ -338,6 +297,7 @@ func createCandleEcho(c echo.Context) error {
 	return nil
 }
 
+// Handler tgGetSymbolEcho used for telegram bot requests and returns candle for given coin(symbol) and timeframe.
 func tgGetSymbolEcho(c echo.Context) error {
 	symbol := c.Param("symbol")
 	timeframe := c.Param("timeframe")
@@ -373,6 +333,7 @@ func tgGetSymbolEcho(c echo.Context) error {
 	return nil
 }
 
+// Handler sddEcho receive time and pass it to service.StrongDuringDowntrend func.
 func sddEcho(c echo.Context) error {
 	userTime := c.Param("time")
 	// get the database from context
@@ -387,6 +348,7 @@ func sddEcho(c echo.Context) error {
 	return nil
 }
 
+// Handler sduEcho receive time and pass it to service.StrongDuringUptrend func.
 func sduEcho(c echo.Context) error {
 	userTime := c.Param("time")
 	// get the database from context
@@ -401,6 +363,7 @@ func sduEcho(c echo.Context) error {
 	return nil
 }
 
+// Handler binanceAPIhandler used to start fetching candlestick data from Binance through API.
 func binanceAPIhandler(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 	BinanceAPIrun := c.Get("BinanceAPIrun").(*uint32)
@@ -411,6 +374,7 @@ func binanceAPIhandler(c echo.Context) error {
 	return c.String(http.StatusOK, "BinanceAPIToPostgres migration started! Have some rest!")
 }
 
+// Handler binanceZipHandler used to start fetching candlestick data from Binance through zip and CSV.
 func binanceZipHandler(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 
@@ -421,6 +385,7 @@ func binanceZipHandler(c echo.Context) error {
 	return c.String(http.StatusOK, "BinanceZipToPostgres migration started! Have some rest!\n")
 }
 
+// Handler dbIntegrityHandler used to start checking database for missing candles.
 func dbIntegrityHandler(c echo.Context) error {
 	pgdb := c.Get("DB").(*pg.DB)
 

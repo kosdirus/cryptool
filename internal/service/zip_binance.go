@@ -15,6 +15,9 @@ import (
 	"time"
 )
 
+// BinanceZipToPostgres used to download CSV files from Binance for given coins and timeframes.
+// It coordinates and calls all needed functions for downloading csv and checksum files and then
+// convert data and store it in database.
 func BinanceZipToPostgres(pgdb *pg.DB) {
 	tn := time.Now()
 	var nFilesDownload, nFilesChecksum, nFilesParse, nRawsParse, nDuplicateParse uint64
@@ -89,6 +92,7 @@ func BinanceZipToPostgres(pgdb *pg.DB) {
 		"Time spent on ParseAllCSVToMongo:", time.Since(tn))
 }
 
+// FileDownload downloads file from given URL and saves it with fileName given in second argument.
 func FileDownload(URL, fileName string) error {
 	//check if file exists
 	if _, err := os.Stat(fileName); err == nil {

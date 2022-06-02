@@ -1,6 +1,7 @@
 package psql
 
 import (
+	"errors"
 	"github.com/go-pg/pg/v10"
 	"github.com/kosdirus/cryptool/internal/core"
 	"github.com/kosdirus/cryptool/internal/storage/psql/initdata"
@@ -8,21 +9,7 @@ import (
 	"time"
 )
 
-func CreateCandle(db *pg.DB, req *core.Candle) (*core.Candle, error) {
-	_, err := db.Model(req).Insert()
-	if err != nil {
-		return nil, err
-	}
-
-	candle := &core.Candle{}
-	//log.Println("converting_candle.go line 71")
-	err = db.Model(candle).
-		Where("candle.my_id = ?", req.MyID).
-		Select()
-	//log.Println("converting_candle.go line 75")
-	return candle, err
-}
-
+// CreateCandleCheckForExists inserts core.Candle to database if it's not already in database.
 func CreateCandleCheckForExists(db *pg.DB, req *core.Candle) (bool, error) {
 	inserted, err := db.Model(req).
 		Where("candle.my_id = ?", req.MyID).
@@ -30,6 +17,7 @@ func CreateCandleCheckForExists(db *pg.DB, req *core.Candle) (bool, error) {
 	return inserted, err
 }
 
+// GetCandleByMyID returns core.Candle by given MyID (my_id).
 func GetCandleByMyID(db *pg.DB, candleMyID string) (*core.Candle, error) {
 	candle := &core.Candle{}
 	log.Println("converting_candle.go line 81")
@@ -40,6 +28,7 @@ func GetCandleByMyID(db *pg.DB, candleMyID string) (*core.Candle, error) {
 	return candle, err
 }
 
+// GetCandleByTimeframeDate returns core.Candle by given timeframe and open time.
 func GetCandleByTimeframeDate(db *pg.DB, timeframe string, opentime int64) ([]core.Candle, error) {
 	c := &[]core.Candle{}
 	err := db.Model(c).
@@ -49,29 +38,30 @@ func GetCandleByTimeframeDate(db *pg.DB, timeframe string, opentime int64) ([]co
 	return *c, err
 }
 
+// GetCandleBySymbolAndTimeframe returns ONLY 1 last (by open time) core.Candle by given symbol and timeframe.
 func GetCandleBySymbolAndTimeframe(db *pg.DB, symbol, timeframe string) (*core.Candle, error) {
 	candle := &core.Candle{}
-	//log.Println("converting_candle.go line 81")
 	err := db.Model(candle).
 		Where("candle.coin = ? AND candle.timeframe = ?", symbol, timeframe).
 		Order("open_time DESC").
 		Limit(1).
 		Select()
-	log.Println("converting_candle.go line 85")
 	return candle, err
 }
 
-type AllLastOpenTime struct {
+// LastOpenTime struct is used for storing data about open time for certain coin and timeframe.
+type LastOpenTime struct {
 	Coin         string `bson:"coin" json:"coin" pg:"coin,use_zero"`
 	Timeframe    string `bson:"timeframe" json:"timeframe" pg:"timeframe,use_zero"`
 	TimeframeInt int64  `bson:"timeframeint" json:"timeframeint" pg:"timeframeint,use_zero"`
 	OpenTime     int64  `bson:"open_time" json:"open_time" pg:"open_time,use_zero"`
 }
 
-func GetAllLastCandles(db *pg.DB) ([]AllLastOpenTime, error) {
+// GetAllLastCandles returns slice of LastOpenTime - all last candles for each coin + timeframe.
+func GetAllLastCandles(db *pg.DB) ([]LastOpenTime, error) {
 	t := time.Now()
 
-	var all []AllLastOpenTime
+	var all []LastOpenTime
 	err := db.Model(&core.Candle{}).
 		Column("coin").
 		Column("timeframe").
@@ -80,30 +70,27 @@ func GetAllLastCandles(db *pg.DB) ([]AllLastOpenTime, error) {
 		Group("timeframe").
 		Select(&all)
 	for i := range all {
-		(&all[i]).TimeframeInt = int64(initdata.TimeframeMapReverse[all[i].Timeframe])
+		(&all[i]).TimeframeInt = int64(initdata.TimeframeMap[all[i].Timeframe])
 	}
-	//log.Println(all)
 	log.Println("GetAllLastCandles:  Time spent: ", time.Since(t))
 	return all, err
 }
 
-func UpdateCandle(db *pg.DB, req *core.Candle) (*core.Candle, error) {
-	_, err := db.Model(req).
+// UpdateCandle updates existing in database candle with given. Primary key is MyID.
+func UpdateCandle(db *pg.DB, req *core.Candle) (bool, error) {
+	result, err := db.Model(req).
 		Where("candle.my_id = ?", req.MyID).
 		Update()
 	if err != nil {
-		return nil, err
+		return false, err
+	} else if result.RowsAffected() != 1 {
+		return false, errors.New("some problem with UpdateCandle(), RowsAffected != 1")
 	}
 
-	candle := &core.Candle{}
-	log.Println("converting_candle.go line 119")
-	err = db.Model(candle).
-		Where("candle.my_id = ?", req.MyID).
-		Select()
-	log.Println("converting_candle.go line 123")
-	return candle, err
+	return true, err
 }
 
+// DeleteCandle deletes candle from database based on given MyID field of candle.
 func DeleteCandle(db *pg.DB, candleMyID string) error {
 	candle := &core.Candle{
 		MyID: candleMyID,

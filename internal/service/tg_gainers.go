@@ -18,8 +18,9 @@ import (
 	2. receive list of symbols sorted by high gain (for StrongDuringUptrend) or less loss (for StrongDuringDowntrend)
 		2.1. paint over with green positive values and with red negative ones
 		2.2. send message to user
-
 */
+
+// Func isInt checks given string if it consists only of int numbers.
 func isInt(s string) bool {
 	for _, c := range s {
 		if !unicode.IsDigit(c) {
@@ -29,6 +30,8 @@ func isInt(s string) bool {
 	return true
 }
 
+// Func checkTimeFormat checks string if it has proper time format for request.
+// Proper string may be "20220531" (8 bytes) or "220531" (6 bytes) and can contain only numbers.
 func checkTimeFormat(receivedTime string) (time.Time, bool) {
 	var t time.Time
 	var err error
@@ -53,6 +56,11 @@ func checkTimeFormat(receivedTime string) (time.Time, bool) {
 	return t, true
 }
 
+// StrongDuringDowntrend receives string which is highTime, then compare "high" value for
+// 1d timeframe candle (for given date in highTime argument) and "close" value for last 30m closed candle.
+//
+// It's advised to use this func on downtrend (if now price for trade pairs are lower comparing to time provided
+// in argument) - to see change of price in percentage and find strong and most gained coins during downtrend.
 func StrongDuringDowntrend(pgdb *pg.DB, highTime string) map[string]float64 {
 	t, ok := checkTimeFormat(highTime)
 	if !ok {
@@ -82,6 +90,26 @@ func StrongDuringDowntrend(pgdb *pg.DB, highTime string) map[string]float64 {
 	return finalCandleMap
 }
 
+// Func candleHandlerSDD used to send requests to database and return map required for comparison in next steps.
+func candleHandlerSDD(pgdb *pg.DB, timeframe string, tint int64) map[string]float64 {
+	candleList, err := psql.GetCandleByTimeframeDate(pgdb, timeframe, tint)
+	if err != nil {
+		log.Println("Error during StrongDuringDowntrend func (DB request):", err)
+		return nil
+	}
+	candleMap := make(map[string]float64)
+	for _, v := range candleList {
+		candleMap[v.Coin] = v.High
+	}
+
+	return candleMap
+}
+
+// StrongDuringUptrend receives string which is lowTime, then compare "low" value for
+// 1d timeframe candle (for given date in lowTime argument) and "close" value for last 30m closed candle.
+//
+// It's advised to use this func on uptrend (if now price for trade pairs are higher comparing to time provided
+// in argument) - to see change of price in percentage and find strong and most gained coins during uptrend.
 func StrongDuringUptrend(pgdb *pg.DB, lowTime string) map[string]float64 {
 	t, ok := checkTimeFormat(lowTime)
 	if !ok {
@@ -111,20 +139,7 @@ func StrongDuringUptrend(pgdb *pg.DB, lowTime string) map[string]float64 {
 	return finalCandleMap
 }
 
-func candleHandlerSDD(pgdb *pg.DB, timeframe string, tint int64) map[string]float64 {
-	candleList, err := psql.GetCandleByTimeframeDate(pgdb, timeframe, tint)
-	if err != nil {
-		log.Println("Error during StrongDuringDowntrend func (DB request):", err)
-		return nil
-	}
-	candleMap := make(map[string]float64)
-	for _, v := range candleList {
-		candleMap[v.Coin] = v.High
-	}
-
-	return candleMap
-}
-
+// Func candleHandlerSDU used to send requests to database and return map required for comparison in next steps.
 func candleHandlerSDU(pgdb *pg.DB, timeframe string, tint int64) map[string]float64 {
 	candleList, err := psql.GetCandleByTimeframeDate(pgdb, timeframe, tint)
 	if err != nil {

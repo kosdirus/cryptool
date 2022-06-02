@@ -6,6 +6,9 @@ import (
 	"log"
 )
 
+// main is entry point to app, it calls func NewDB to connect to DB
+// and then passes it as argument to function EchoApiServer that
+// starts HTTP server
 func main() {
 	pgdb, err := psql.NewDB()
 	if err != nil {

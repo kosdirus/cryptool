@@ -9,43 +9,16 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"net/http"
 	"os"
-	"time"
 )
 
-// CandleRequest probably default "Candle" struct is the same, so it can be enough to use it here
-type CandleRequest struct {
-	ID                       int64     `json:"id"`
-	MyID                     string    `bson:"my_id" json:"my_id" pg:"my_id"`
-	CoinTF                   string    `bson:"coin_tf" json:"coin_tf" pg:"coin_tf"`
-	Coin                     string    `bson:"coin" json:"coin" pg:"coin"`
-	Timeframe                string    `bson:"timeframe" json:"timeframe" pg:"timeframe"`
-	UTCOpenTime              time.Time `bson:"utc_open_time" json:"utc_open_time" pg:"utc_open_time"`
-	OpenTime                 int64     `bson:"open_time" json:"open_time" pg:"open_time"`
-	Open                     float64   `bson:"open" json:"open" pg:"open"`
-	High                     float64   `bson:"high" json:"high" pg:"high"`
-	Low                      float64   `bson:"low" json:"low" pg:"low"`
-	Close                    float64   `bson:"close" json:"close" pg:"close"`
-	Volume                   float64   `bson:"volume" json:"volume" pg:"volume"`
-	UTCCloseTime             time.Time `bson:"utc_close_time" json:"utc_close_time" pg:"utc_close_time"`
-	CloseTime                int64     `bson:"close_time" json:"close_time" pg:"close_time"`
-	QuoteAssetVolume         float64   `bson:"quote_asset_volume" json:"quote_asset_volume" pg:"quote_asset_volume"`
-	NumberOfTrades           int64     `bson:"number_of_trades" json:"number_of_trades" pg:"number_of_trades"`
-	TakerBuyBaseAssetVolume  float64   `bson:"taker_buy_base_asset_volume" json:"taker_buy_base_asset_volume" pg:"taker_buy_base_asset_volume"`
-	TakerBuyQuoteAssetVolume float64   `bson:"taker_buy_quote_asset_volume" json:"taker_buy_quote_asset_volume" pg:"taker_buy_quote_asset_volume"`
-	MA50                     float64   `bson:"ma50" json:"ma50" pg:"ma50,use_zero"`
-	MA50Trend                bool      `bson:"ma50trend" json:"ma50trend" pg:"ma50trend,use_zero"`
-	MA100                    float64   `bson:"ma100" json:"ma100" pg:"ma100,use_zero"`
-	MA100Trend               bool      `bson:"ma100trend" json:"ma100trend" pg:"ma100trend,use_zero"`
-	MA200                    float64   `bson:"ma200" json:"ma200" pg:"ma200,use_zero"`
-	MA200Trend               bool      `bson:"ma200trend" json:"ma200trend" pg:"ma200trend,use_zero"`
-}
-
+// CandleResponse used for response to HTTP requests for single instance of core.Candle.
 type CandleResponse struct {
 	Success bool         `json:"success"`
 	Error   string       `json:"error"`
 	Candle  *core.Candle `json:"candle"`
 }
 
+// CandlesResponse used for response to HTTP requests for multiple instances of core.Candle.
 type CandlesResponse struct {
 	Success bool          `json:"success"`
 	Error   string        `json:"error"`
@@ -118,5 +91,3 @@ func EchoApiServer(pgdb *pg.DB) {
 	}
 	e.Logger.Fatal(e.Start(fmt.Sprint(":", port)))
 }
-
-// Handlers
